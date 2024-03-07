@@ -6,9 +6,15 @@
 [] find test/real dataset(s)
 
 
+
 # Baseline
 [] implement naive model
-[] implement model 
+[] implement GPT2
 
 
-# Flash Attention
+# Flash Attention Implementation
+[]
+
+
+# Experimentation
+[] establish what results to measure
