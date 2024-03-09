@@ -18,3 +18,8 @@
 
 # Experimentation
 [] establish what results to measure
+
+
+
+# Bugs
+[] figure out why attention is not matching torch implementation
