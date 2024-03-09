@@ -26,8 +26,19 @@ class Attention(nn.Module):
             torch.tril(torch.ones(seq_len, seq_len)).view(seq_len, seq_len),
         )
 
+        self.multihead_attn = nn.MultiheadAttention(
+            embed_dim, num_heads, batch_first=True
+        )
+
     def forward(self, x, is_causal=True):
         batch_size, seq_len, embed_dim = x.size()
+
+        expected_y, expected_attention = self.multihead_attn(
+            self.Q(x),
+            self.K(x),
+            self.V(x),
+            average_attn_weights=False,
+        )
         q = self.Q(x).view(
             batch_size, seq_len, self.num_heads, embed_dim // self.num_heads
         )
@@ -41,15 +52,18 @@ class Attention(nn.Module):
         # batch_size, head, seq_len, seq_len
         # where ij is q_i*k_j
         attention: torch.Tensor = torch.einsum("bihd,bjhd->bhij", q, k) * (
-            1 / math.sqrt(embed_dim // self.num_heads)
+            1.0 / math.sqrt(embed_dim // self.num_heads)
         )
-        attention = attention.masked_fill(
-            self.attention_mask[None, None, :seq_len, :seq_len] == 0, -math.inf
-        )
+
+        if is_causal:
+            attention = attention.masked_fill(
+                self.attention_mask[None, None, :seq_len, :seq_len] == 0, -math.inf
+            )
+
         # softmax over the last dimension which is over qk_*
         attention = torch.softmax(attention, dim=-1)
-        import ipdb;ipdb.set_trace()
         # TODO dropout?
+
         y = (
             torch.einsum("bhij,bihd->bihd", attention, v)
             .contiguous()
