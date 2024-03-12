@@ -1,7 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
-from model import Attention, Block, Config
+from model import Attention, Block, BlockConfig, NanoGpt, NanoGptConfig
 
 
 def test_attention_shape():
@@ -34,7 +34,23 @@ def test_block_shape():
     batch, seq_len, num_heads, embed_dim = 4, 32, 1, 8
     x = torch.rand(batch, seq_len, embed_dim)
     block = Block(
-        Config(num_heads=num_heads, seq_len=seq_len, embed_dim=embed_dim, num_layers=1)
+        BlockConfig(num_heads=num_heads, seq_len=seq_len, embed_dim=embed_dim)
     )
     out = block(x)
     assert out.size() == (4, 32, 8)
+
+
+def test_nano_gpt_shape():
+    config = NanoGptConfig(
+        vocab_size=100,
+        num_layers=2,
+        block_config=BlockConfig(
+            embed_dim=16,
+            num_heads=2,
+            seq_len=128,
+        ),
+    )
+    x = torch.randint(0, 100, size=(32, 128))
+    model = NanoGpt(config)
+    out = model(x)
+    assert out.size() == (32, 128, 100)
