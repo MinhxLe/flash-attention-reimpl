@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 import math
 import torch
+from torch.autograd import forward_ad
 import torch.nn as nn
 from torch.nn import GELU, Sequential, functional as F
 
 
 @dataclass
-class Config:
-    num_layers: int
+class BlockConfig:
     embed_dim: int
     num_heads: int
     seq_len: int
@@ -16,8 +16,15 @@ class Config:
     bias: bool = True
 
 
+@dataclass
+class NanoGptConfig:
+    vocab_size: int
+    num_layers: int
+    block_config: BlockConfig
+
+
 class Attention(nn.Module):
-    # TODO move parameters to config
+    # TODO move parameters to cfg
     def __init__(self, embed_dim, num_heads, seq_len, dropout=0.0, bias=True):
         super().__init__()
         assert embed_dim % num_heads == 0
@@ -81,18 +88,42 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, cfg: BlockConfig):
         super().__init__()
         # normalized on last dimiension
-        self.ln1 = nn.LayerNorm(normalized_shape=config.embed_dim)
-        self.ln2 = nn.LayerNorm(normalized_shape=config.embed_dim)
+        self.ln1 = nn.LayerNorm(normalized_shape=cfg.embed_dim)
+        self.ln2 = nn.LayerNorm(normalized_shape=cfg.embed_dim)
         self.attn = Attention(
-            embed_dim=config.embed_dim,
-            num_heads=config.num_heads,
-            seq_len=config.seq_len,
+            embed_dim=cfg.embed_dim,
+            num_heads=cfg.num_heads,
+            seq_len=cfg.seq_len,
         )
-        self.mlp = MLP(embed_dim=config.embed_dim, dropout=config.resid_dropout)
+        self.mlp = MLP(embed_dim=cfg.embed_dim, dropout=cfg.resid_dropout)
 
     def forward(self, x):
         x = self.attn(self.ln1(x)) + x
         return x + self.mlp(self.ln2(x))
+
+
+class NanoGpt(nn.Module):
+    def __init__(self, cfg: NanoGptConfig):
+        super().__init__()
+        self.config = cfg
+        self.pos_embed = nn.Embedding(
+            cfg.block_config.seq_len, cfg.block_config.embed_dim
+        )
+        self.token_embed = nn.Embedding(cfg.vocab_size, cfg.block_config.embed_dim)
+        self.blocks = [Block(cfg.block_config) for _ in range(cfg.num_layers)]
+        self.ln = nn.LayerNorm(normalized_shape=cfg.block_config.embed_dim)
+        # TODO why is bias false here?
+        self.out = nn.Linear(cfg.block_config.embed_dim, cfg.vocab_size, bias=False)
+
+    def forward(self, x):
+        batch, seq_len = x.size()
+        assert seq_len <= self.config.block_config.seq_len
+        # absolute positioning, adding extra dim for
+        position = torch.arange(0, seq_len, dtype=torch.long)[None, :]
+        x = self.pos_embed(position) + self.token_embed(x)
+        for block in self.blocks:
+            x = block(x)
+        return self.out(self.ln(x))
