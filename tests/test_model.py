@@ -1,19 +1,19 @@
 import pytest
 import torch
 import torch.nn as nn
-from model import Attention
+from model import Attention, Block, Config
 
-@pytest.mark.skip()
+
 def test_attention_shape():
     batch, seq_len, embed_dim = 8, 32, 4
     x = torch.rand(batch, seq_len, embed_dim)
     attention = Attention(embed_dim, 2, seq_len)
     out = attention(x)
-    assert out.shape == (8, 32, 4)
+    assert out.size() == (8, 32, 4)
 
 
 @pytest.mark.skip()
-def test_correctness():
+def test_attention_correctness():
     # TODO this isn't working
     batch, seq_len, num_heads, embed_dim = 4, 32, 1, 8
     x = torch.rand(batch, seq_len, embed_dim)
@@ -28,3 +28,13 @@ def test_correctness():
     expected_out, expected_attn_weight = torch_attention(q, k, v)
     assert out.shape == expected_out.shape
     assert torch.allclose(out, expected_out)
+
+
+def test_block_shape():
+    batch, seq_len, num_heads, embed_dim = 4, 32, 1, 8
+    x = torch.rand(batch, seq_len, embed_dim)
+    block = Block(
+        Config(num_heads=num_heads, seq_len=seq_len, embed_dim=embed_dim, num_layers=1)
+    )
+    out = block(x)
+    assert out.size() == (4, 32, 8)
