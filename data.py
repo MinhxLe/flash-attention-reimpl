@@ -3,13 +3,13 @@ import json
 import numpy as np
 import requests
 import torch
-from torch.utils.data import TensorDataset, random_split, DataLoader
+from torch.utils.data import TensorDataset, random_split, DataLoader, BatchSampler
 
 
 DATA_DIR = "./data"
 
 
-def create_sp_char_dataset(batch_size=128):
+def create_sp_char_dataset(seq_len, batch_size=128):
     # copied from https://github.com/karpathy/nanoGPT
     DATASET_DIR = os.path.join(DATA_DIR, "sp_char")
     input_file_path = os.path.join(DATASET_DIR, "input.txt")
@@ -44,10 +44,9 @@ def create_sp_char_dataset(batch_size=128):
     encoded_data = encode(data)
     n = len(data)
     n_train = int(0.9 * n)
-    train_data, test_data = random_split(
-        encoded_data,
-        [n - n_train, n_train],
-    )
+
+    train_data = encoded_data[:n_train]
+    test_data = encoded_data[n_train:]
 
     print(f"train has {len(train_data):,} tokens")
     print(f"test has {len(test_data):,} tokens")
@@ -68,12 +67,9 @@ def create_sp_char_dataset(batch_size=128):
     with open(os.path.join(DATASET_DIR, "meta.json"), "w") as f:
         json.dump(meta, f)
 
-    return DataLoader(
-        TensorDataset(torch.tensor(train_ids)),
-        batch_size=batch_size,
-        shuffle=True,
-    ), DataLoader(
-        TensorDataset(torch.tensor(test_ids)),
-        batch_size=batch_size,
-        shuffle=True,
+    return (
+        torch.tensor(train_ids, dtype=torch.long),
+        torch.tensor(test_ids, dtype=torch.long),
+        stoi,
+        itos,
     )

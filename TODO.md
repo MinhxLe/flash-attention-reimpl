@@ -3,13 +3,14 @@
     [] checkmark
     [] logging
     [] benchmarking
-[] find test/real dataset(s)
+[] find test dataset
+[x] real dataset(s)
 
 
 
 # Baseline
 [] implement naive model
-[] implement GPT2
+[x] implement GPT2
 
 
 # Flash Attention Implementation

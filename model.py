@@ -113,7 +113,9 @@ class NanoGpt(nn.Module):
             cfg.block_config.seq_len, cfg.block_config.embed_dim
         )
         self.token_embed = nn.Embedding(cfg.vocab_size, cfg.block_config.embed_dim)
-        self.blocks = [Block(cfg.block_config) for _ in range(cfg.num_layers)]
+        self.blocks = nn.Sequential(
+            *[Block(cfg.block_config) for _ in range(cfg.num_layers)]
+        )
         self.ln = nn.LayerNorm(normalized_shape=cfg.block_config.embed_dim)
         # TODO why is bias false here?
         self.out = nn.Linear(cfg.block_config.embed_dim, cfg.vocab_size, bias=False)
@@ -124,6 +126,5 @@ class NanoGpt(nn.Module):
         # absolute positioning, adding extra dim for
         position = torch.arange(0, seq_len, dtype=torch.long)[None, :]
         x = self.pos_embed(position) + self.token_embed(x)
-        for block in self.blocks:
-            x = block(x)
+        x = self.blocks(x)
         return self.out(self.ln(x))
