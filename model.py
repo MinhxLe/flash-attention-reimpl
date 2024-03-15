@@ -25,7 +25,15 @@ class NanoGptConfig:
 
 class Attention(nn.Module):
     # TODO move parameters to cfg
-    def __init__(self, embed_dim, num_heads, seq_len, dropout=0.0, bias=True):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        seq_len,
+        attn_dropout=0.0,
+        resid_dropout=0.0,
+        bias=True,
+    ):
         super().__init__()
         assert embed_dim % num_heads == 0
 
@@ -34,43 +42,55 @@ class Attention(nn.Module):
         self.C_attn = nn.Linear(embed_dim, embed_dim * 3, bias=bias)
         self.C_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
         # regularization
-        # self.dropout = nn.Dropout(p=dropout)
-
-        # lower left triangle since q is row, k is col
-        self.register_buffer(
-            "attention_mask",
-            torch.tril(torch.ones(seq_len, seq_len)).view(seq_len, seq_len),
-        )
+        self.attn_dropout = nn.Dropout(p=attn_dropout)
+        self.resid_dropout = nn.Dropout(p=attn_dropout)
+        self.register_buffer("tril", torch.tril(torch.ones(seq_len, seq_len)))
 
     def forward(self, x, is_causal=True):
         batch_size, seq_len, embed_dim = x.size()
+        head_size = embed_dim // self.num_heads
 
         q, k, v = self.C_attn(x).split(embed_dim, dim=2)  # (B,S,D*3)->(B,S,D)x3
-        q = q.view(batch_size, seq_len, self.num_heads, embed_dim // self.num_heads)
-        k = k.view(batch_size, seq_len, self.num_heads, embed_dim // self.num_heads)
-        v = v.view(batch_size, seq_len, self.num_heads, embed_dim // self.num_heads)
+        q = q.view(batch_size, seq_len, self.num_heads, head_size).transpose(1, 2)
+        k = k.view(batch_size, seq_len, self.num_heads, head_size).transpose(1, 2)
+        v = v.view(batch_size, seq_len, self.num_heads, head_size).transpose(1, 2)
 
-        # batch_size, head, seq_len, seq_len
-        # where ij is q_i*k_j
-        attention: torch.Tensor = torch.einsum("bihd,bjhd->bhij", q, k) * (
-            1.0 / math.sqrt(embed_dim // self.num_heads)
-        )
-
+        attn = q @ k.transpose(2, 3) / math.sqrt(head_size)
         if is_causal:
-            attention = attention.masked_fill(
-                self.attention_mask[None, None, :seq_len, :seq_len] == 0, -math.inf
-            )
+            attn = attn.masked_fill(self.tril[:seq_len, :seq_len] == 0, float("-inf"))
+        attn = torch.softmax(attn, dim=-1)
+        attn = self.attn_dropout(attn)
 
-        # softmax over the last dimension which is over qk_*
-        attention = torch.softmax(attention, dim=-1)
-        # TODO dropout?
+        y = attn @ v
+        y = y.transpose(1, 2).reshape(batch_size, seq_len, embed_dim)
+        return self.resid_dropout(y)
 
-        y = (
-            torch.einsum("bhij,bihd->bihd", attention, v)
-            .contiguous()
-            .view(batch_size, seq_len, embed_dim)
-        )
-        return self.C_proj(y)
+        # TODO this implementation was wrong. figure out why
+        # q = q.view(batch_size,k seq_len, self.num_heads, embed_dim // self.num_heads)
+        # k = k.view(batch_size, seq_len, self.num_heads, embed_dim // self.num_heads)
+        # v = v.view(batch_size, seq_len, self.num_heads, embed_dim // self.num_heads)
+        #
+        # # batch_size, head, seq_len, seq_len
+        # # where ij is q_i*k_j
+        # attention: torch.Tensor = torch.einsum("bihd,bjhd->bhij", q, k) * (
+        #     1.0 / math.sqrt(embed_dim // self.num_heads)
+        # )
+        # if is_causal:
+        #     attention = attention.masked_fill(
+        #         self.tril[:seq_len, :seq_len] == 0, float("-inf")
+        #     )
+        #
+        # # softmax over the last dimension which is over qk_*
+        # attention = torch.softmax(attention, dim=-1)
+        # attention = self.attn_dropout(attention)
+        # # TODO dropout?
+        #
+        # y = (
+        #     torch.einsum("bhij,bihd->bihd", attention, v)
+        #     .contiguous()
+        #     .view(batch_size, seq_len, embed_dim)
+        # )
+        # return self.resid_dropout(self.C_proj(y))
 
 
 class MLP(nn.Module):
@@ -78,7 +98,7 @@ class MLP(nn.Module):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 4),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(embed_dim * 4, embed_dim),
             nn.Dropout(dropout),
         )
@@ -110,9 +130,13 @@ class NanoGpt(nn.Module):
         super().__init__()
         self.config = cfg
         self.pos_embed = nn.Embedding(
-            cfg.block_config.seq_len, cfg.block_config.embed_dim
+            cfg.block_config.seq_len,
+            cfg.block_config.embed_dim,
         )
-        self.token_embed = nn.Embedding(cfg.vocab_size, cfg.block_config.embed_dim)
+        self.token_embed = nn.Embedding(
+            cfg.vocab_size,
+            cfg.block_config.embed_dim,
+        )
         self.blocks = nn.Sequential(
             *[Block(cfg.block_config) for _ in range(cfg.num_layers)]
         )
@@ -124,7 +148,7 @@ class NanoGpt(nn.Module):
         batch, seq_len = x.size()
         assert seq_len <= self.config.block_config.seq_len
         # absolute positioning, adding extra dim for
-        position = torch.arange(0, seq_len, dtype=torch.long)[None, :]
+        position = torch.arange(0, seq_len, dtype=torch.long, device="cuda")[None, :]
         x = self.pos_embed(position) + self.token_embed(x)
         x = self.blocks(x)
         return self.out(self.ln(x))

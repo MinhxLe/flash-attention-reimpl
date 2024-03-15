@@ -35,11 +35,6 @@ def create_sp_char_dataset(seq_len, batch_size=128):
     def encode(s) -> list[int]:
         return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
 
-    def decode(l):
-        return "".join(
-            [itos[i] for i in l]
-        )  # decoder: take a list of integers, output a string
-
     # create the train and test splits
     encoded_data = encode(data)
     n = len(data)
