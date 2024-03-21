@@ -2,3 +2,6 @@ jax==0.4.24
 jaxlib==0.4.24+cuda12.cudnn89
 ruff==0.2.2
 ruff-lsp==0.0.52
+datasets==2.17.1
+tokenizers==0.15.2
+transformers==4.39.0

@@ -1,12 +1,11 @@
 # Scaffolding
-[] build out train script
+[x] build out train script
     [] checkmark
-    [] logging
+    [x] logging
     [] benchmarking
-[] find test dataset
+[x] find test dataset
 [x] real dataset(s)
-
-
+[] wikitext and tokenization 
 
 # Baseline
 [] implement naive model
