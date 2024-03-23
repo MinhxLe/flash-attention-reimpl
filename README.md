@@ -1,1 +1,1 @@
-A reimplementation of flash attention benchmarked with GPT2 architecture.
+A bunch of random experiments and paper reimplementations around papers.
