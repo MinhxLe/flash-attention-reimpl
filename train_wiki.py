@@ -8,16 +8,20 @@ import torch
 import torch.optim
 
 device = "cuda"
+torch.random.manual_seed(69)
 DEBUG_MODE = False 
 logging.basicConfig(level=logging.INFO)
+# torch.set_default_dtype(torch.float16)
 
-MAX_SEQ_LEN = 100
+
+# configuration from https://openreview.net/pdf?id=COZDy0WYGg
 
 
 @dataclass
 class TrainConfig:
     batch_size: int = 64
-    learning_rate: float = 3e-4
+    learning_rate: float = 6e-04
+    weight_decay: float = 0.01
     num_epochs: int = 5000 if not DEBUG_MODE else 1
 
 
@@ -28,12 +32,13 @@ train_dataset = WikiTextDataset(Split.TRAIN)
 train_cfg = TrainConfig()
 
 # model config
+MAX_SEQ_LEN = 10 if DEBUG_MODE else 1024
 model_cfg = NanoGptConfig(
-    num_layers=6,
+    num_layers=2 if DEBUG_MODE else 12,
     vocab_size=train_dataset.vocab_size,
     block_config=BlockConfig(
-        embed_dim=384,
-        num_heads=6,
+        embed_dim=768,
+        num_heads=12,
         seq_len=MAX_SEQ_LEN,
     ),
 )
@@ -48,17 +53,20 @@ train_dataloader = DataLoader(
 
 # specify model
 model = NanoGpt(model_cfg).to("cuda")
+# TODO something is off in this math here
 logging.info(f"{sum(p.numel() for p in model.parameters())/1e6} M parameters")
 
 # optimizer
 # TODO move training logic to a different module
-optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg.learning_rate)
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=train_cfg.learning_rate,
+    weight_decay=train_cfg.weight_decay,
+)
 loss_fn = torch.nn.CrossEntropyLoss()
 
 
 # train loop
-
-
 logging.info("Starting training...")
 for i in range(train_cfg.num_epochs):
     # TODO add timing
@@ -75,8 +83,7 @@ for i in range(train_cfg.num_epochs):
         )
         loss.backward()
         optimizer.step()
-        if i % 500 == 0:
-            logging.info(f"Epoch: {i}, Loss: {loss.item():.4f}")
+        logging.info(f"Epoch: {i}, Loss: {loss.item():.4f}")
     if DEBUG_MODE:
         import ipdb
 
