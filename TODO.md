@@ -1,25 +1,19 @@
-# Scaffolding
-[x] build out train script
-    [] checkmark
-    [x] logging
-    [] benchmarking
-[x] find test dataset
-[x] real dataset(s)
-[] wikitext and tokenization 
+# TODO
+[x] slice implementation
+[] checkmark model impl
+[] test eval impl
+[] perplexity impl
+[] run on remote server
+[] lin transformer impl
+[] porcupine impl
 
-# Baseline
-[] implement naive model
-[x] implement GPT2
-
-
-# Flash Attention Implementation
+# Experiment 
+[] run gpt2 + wt103 -> perplexity 
 []
 
-
-# Experimentation
-[] establish what results to measure
-
-
-
 # Bugs
-[] figure out why attention is not matching torch implementation
+[] figure out float16
+[] figure out weighting loss with padding
+
+# Data processing
+[] add BOS, EOS, PAD token
