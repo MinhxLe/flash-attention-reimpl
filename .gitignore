@@ -2,3 +2,4 @@ data/
 hi.egg-info/
 __pycache__/
 checkpoints/
+logs/
