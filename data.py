@@ -16,7 +16,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 DATA_DIR = "./data"
-TEST=1
 
 
 class Split(StrEnum):
